@@ -1,0 +1,35 @@
+{
+	"name": "ice", 
+	"description": "ZeroC ICE RPC implementation for node", 
+	"keywords": ["node", "ice", "rpc"], 
+	"version": "0.1.2", 
+	"maintainers": [{
+		"name": "Yuri Dursin", 
+		"email": "dy@hotbox.ru"
+	}],
+	"engines": {
+		"node":  ">=0.10.1" 
+	},
+	"licenses": [{
+		"type": "MIT"
+	}],
+	"preferGlobal": true, 
+	"repository": {
+		"type": "git", 
+		"url": "https://github.com/durs/node-ice.git"
+	}, 
+	"bugs": {
+		"email": "vicapow@gmail.com", 
+		"url": "https://github.com/durs/node-ice/issues"
+	},
+	"directories": {
+		"lib": "./lib",
+		"src": "./src", 
+		"build": "./build", 
+		"test": "./test"
+	}, 
+	"main": "./build/Release/ice.node", 
+	"scripts": {
+		"preinstall": "node-waf clean || true; node-waf configure build"
+	}
+}
