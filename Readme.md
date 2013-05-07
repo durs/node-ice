@@ -1,13 +1,15 @@
 
-::WARNING:: Partial ZeroC Ice client implementation
+::WARNING:: Partial ZeroC Ice RPC client implementation
 
 # node-ice
 
 This project provides a bridge to the ZeroC ICE RPC framework.
-Tested only with Node.js v 0.10.1 on Windows platform (Visual Studio 2010)
+
+Project tested only with Node.js v 0.10.1 on Windows platform (Visual Studio 2010)
 
 What follows is a simple example. Note that this hasn't yet even been fully implemented but this should give you an idea of what we're aiming for.
-Server slice declations:
+
+Server slice declarations:
 
 	module Monitoring
 	{
@@ -30,7 +32,7 @@ Server slice declations:
 		};
 	}
 
-Node.js client implementation code:
+Ice client node.js implementation code:
 	
 	var ice = require('ice');
 
