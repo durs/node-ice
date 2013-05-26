@@ -7,6 +7,8 @@
 #include <Ice/Service.h>
 #include <IceUtil/Thread.h>
 
+class NodeIceCommunicator;
+class NodeIceProxy;
 
 //-------------------------------------------------------------------------------------
 
@@ -31,6 +33,177 @@
 #define ICE3FLOAT(p, s) ICE3NODE(p, s, Ice::Float, Number, 0)
 #define ICE3DOUBLE(p, s) ICE3NODE(p, s, Ice::Double, Number, 0)
 #define ICE3STR(p, s) { std::wstring v; node2str(p, v); s->write(v); }
+
+inline void ice_write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, const Ice::Byte def)
+{
+	s->write(p.IsEmpty() ? def : (Ice::Byte)p->Int32Value());
+}
+inline void ice_write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, const Ice::Short def)
+{
+	s->write(p.IsEmpty() ? def : (Ice::Short)p->Int32Value());
+}
+inline void ice_write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, const Ice::Int def)
+{
+	s->write(p.IsEmpty() ? def : (Ice::Int)p->Int32Value());
+}
+inline void ice_write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, const Ice::Long def)
+{
+	s->write(p.IsEmpty() ? def : (Ice::Long)p->IntegerValue());
+}
+inline void ice_write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, const Ice::Float def)
+{
+	s->write(p.IsEmpty() ? def : (Ice::Float)p->NumberValue());
+}
+inline void ice_write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, const Ice::Double def)
+{
+	s->write(p.IsEmpty() ? def : (Ice::Double)p->NumberValue());
+}
+inline void ice_write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, const bool def)
+{
+	s->write(p.IsEmpty() ? def : p->BooleanValue());
+}
+inline void ice_write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, const std::wstring &def)
+{
+	std::wstring v;
+	if (!node2str(p, v)) v = def;
+	s->write(v);
+}
+
+inline void ice_read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, const Ice::Byte def)
+{
+	Ice::Byte v;
+	s->read(v);
+	p = v8::Int32::New(v);
+}
+inline void ice_read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, const Ice::Short def)
+{
+	Ice::Short v;
+	s->read(v);
+	p = v8::Int32::New(v);
+}
+inline void ice_read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, const Ice::Int def)
+{
+	Ice::Int v;
+	s->read(v);
+	p = v8::Int32::New(v);
+}
+inline void ice_read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, const Ice::Long def)
+{
+	Ice::Long v;
+	s->read(v);
+	p = v8::Integer::New(v);
+}
+inline void ice_read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, const Ice::Double def)
+{
+	Ice::Double v;
+	s->read(v);
+	p = v8::Number::New(v);
+}
+inline void ice_read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, const Ice::Float def)
+{
+	Ice::Float v;
+	s->read(v);
+	p = v8::Number::New(v);
+}
+inline void ice_read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, bool def)
+{
+	bool v;
+	s->read(v);
+	p = v8::Local<v8::Boolean>::New(v8::Boolean::New(v));
+}
+inline void ice_read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, const std::wstring &def)
+{
+	std::wstring v;
+	s->read(v);
+	p = v8::String::New((uint16_t*)v.c_str(), v.length());
+}
+
+//-------------------------------------------------------------------------------------
+
+template<typename T>
+class NodeIceTypeT: public node::ObjectWrap, public T
+{
+public:
+	static void node_register(v8::Handle<v8::Object> &target, const char *name, bool as_instance);
+	NODE_DEFINE_CONSTRUCTOR(NodeIceTypeT, init_on_create)
+};
+
+class NodeIceTypeBase
+{
+public:
+	static NodeIceTypeBase *create(v8::Handle<v8::Value> &info);
+	virtual ~NodeIceTypeBase() {}
+	virtual void init(const v8::Arguments& args);
+	virtual void set(v8::Local<v8::Object> &me, std::wstring &key, v8::Local<v8::Value> &val) {}
+	virtual NodeIceTypeBase *clone() { return 0; }
+	virtual bool write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p) { return false; }
+	virtual bool read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p) { return false; }
+};
+
+template<typename T>
+class NodeIceSimpleT: public NodeIceTypeBase
+{
+public:
+	static const T defval;
+	virtual NodeIceTypeBase *clone() { return new NodeIceSimpleT<T>(); }
+	virtual bool write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p) { ice_write(s, p, defval); return true; }
+	virtual bool read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p) { ice_read(s, p, defval); return true; }
+};
+
+class NodeIceSequence: public NodeIceTypeBase
+{
+public:
+	inline NodeIceSequence() {}
+	inline NodeIceSequence(const NodeIceSequence &v): type(v.type) {}
+	virtual ~NodeIceSequence() {}
+	virtual void init(const v8::Arguments& args);
+	virtual NodeIceTypeBase *clone() { return new NodeIceSequence(*this); }
+	virtual bool write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p);
+private:
+	boost::shared_ptr<NodeIceTypeBase> type;
+};
+
+class NodeIceParam: public NodeIceTypeBase
+{
+public:
+	inline NodeIceParam(): optional(0) {}
+	inline NodeIceParam(const NodeIceParam &v): name(v.name), type(v.type), optional(v.optional) {}
+	inline NodeIceParam(v8::Handle<v8::Value> &type_info): type(NodeIceTypeBase::create(type_info)), optional(0) {}
+	virtual void init(const v8::Arguments& args);
+	virtual NodeIceTypeBase *clone() { return new NodeIceParam(*this); }
+	virtual bool write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p) { if (!type) return false; type->write(s, p); return true; }
+	virtual bool read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p) { if (!type) return false; type->read(s, p); return true; }
+private:
+	std::wstring name;
+	boost::shared_ptr<NodeIceTypeBase> type;
+	int optional;
+};
+
+class NodeIceMethod: public NodeIceTypeBase
+{
+public:
+	typedef std::vector<NodeIceTypeBase*> Params;
+	boost::shared_ptr<NodeIceTypeBase> type;
+	Params params;
+	int mode;
+
+	inline NodeIceMethod() {}
+	virtual ~NodeIceMethod() { clear(); }
+	inline bool IsArguments() { return !params.empty(); }
+	void clear();
+
+	virtual void init(const v8::Arguments& args);
+	virtual bool write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p);
+};
+
+class NodeIceClass: public NodeIceTypeBase
+{
+public:
+	virtual void set(v8::Local<v8::Object> &me, std::wstring &key, v8::Local<v8::Value> &val);
+private:
+	typedef std::map<std::wstring, NodeIceTypeBase*> Items; 
+	Items items;
+};
 
 //-------------------------------------------------------------------------------------
 
@@ -78,7 +251,7 @@ public:
 };
 
 
-void ice_register(v8::Handle<v8::Object> target);
+void ice_node_register(v8::Handle<v8::Object> &target);
 
 //-------------------------------------------------------------------------------------
 #endif

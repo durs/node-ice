@@ -1,7 +1,21 @@
 
 #include "nodeice.h"
 
-static v8::Persistent<v8::String> g_v8s_length(v8::String::New("length"));
+const Ice::Byte NodeIceSimpleT<Ice::Byte>::defval = 0;
+const Ice::Short NodeIceSimpleT<Ice::Short>::defval = 0;
+const Ice::Int NodeIceSimpleT<Ice::Int>::defval = 0;
+const Ice::Long NodeIceSimpleT<Ice::Long>::defval = 0;
+const Ice::Double NodeIceSimpleT<Ice::Double>::defval = 0;
+const Ice::Float NodeIceSimpleT<Ice::Float>::defval = 0;
+const std::wstring NodeIceSimpleT<std::wstring>::defval;
+const bool NodeIceSimpleT<bool>::defval = false;
+
+static v8::Persistent<v8::String> g_v8s_type = v8::Persistent<v8::String>::New(v8::String::New("__type"));
+static v8::Persistent<v8::String> g_v8s_subtype = v8::Persistent<v8::String>::New(v8::String::New("subtype"));
+static v8::Persistent<v8::String> g_v8s_optional = v8::Persistent<v8::String>::New(v8::String::New("optional"));
+static v8::Persistent<v8::String> g_v8s_length = v8::Persistent<v8::String>::New(v8::String::New("length"));
+static v8::Persistent<v8::String> g_v8s_write = v8::Persistent<v8::String>::New(v8::String::New("write"));
+static v8::Persistent<v8::String> g_v8s_read = v8::Persistent<v8::String>::New(v8::String::New("read"));
 
 //-------------------------------------------------------------------------------------
 // Common Ice utilities
@@ -14,13 +28,14 @@ static v8::Local<v8::Value> ice2node(Ice::InputStreamPtr &in, v8::Handle<v8::Obj
 	scope.Close(v8::Undefined());
 }
 
-static v8::Local<v8::Value> ice2node(Ice::InputStreamPtr &s, v8::Handle<v8::Value> &info)
+static v8::Local<v8::Value> ice2node(Ice::InputStreamPtr &s, v8::Handle<v8::Value> &info, bool root = true)
 {
 	v8::HandleScope scope;
 	v8::Handle<v8::Value> val;
 	std::wstring str;
 	if (node2str(info, str))
 	{
+		s->startEncapsulation();
 		if (str==L"string") ICE2STR(val, s)
 		else if (str==L"byte") ICE2BYTE(val, s)
 		else if (str==L"short") ICE2SHORT(val, s)
@@ -30,6 +45,7 @@ static v8::Local<v8::Value> ice2node(Ice::InputStreamPtr &s, v8::Handle<v8::Valu
 		else if (str==L"double") ICE2DOUBLE(val, s)
 		else if (str==L"float") ICE2FLOAT(val, s)
 		//else error
+		s->endEncapsulation();
 	}
 	else
 	{
@@ -49,8 +65,8 @@ static bool node2ice(Ice::OutputStreamPtr &s, v8::Handle<v8::Object> &info, v8::
 	uint32_t cnt = 0;
 	node2obj(val, obj);
 
-	//if (!root) s->startEncapsulation();
-	bool rcode = objenum_t(info, [&s, &cnt, obj](v8::Local<v8::Value> &key, v8::Local<v8::Value> &type)->bool{		
+	s->startEncapsulation();
+	bool rcode = objenum_t(info, [&s, &cnt, obj](v8::Local<v8::Value> &key, v8::Local<v8::Value> &type)->bool{
 
 		//std::wstring skey;
 		//node2str(key, skey);
@@ -72,30 +88,78 @@ static bool node2ice(Ice::OutputStreamPtr &s, v8::Handle<v8::Object> &info, v8::
 		cnt ++;
 		return node2ice(s, type, val, false);
 	});
-    //if (!root) s->endEncapsulation();
+	s->endEncapsulation();
 	return rcode;
 }
 
 static bool node2ice(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &info, v8::Local<v8::Value> &val, bool root)
 {
 	v8::HandleScope scope;
+	std::wstring type, subtype;
+	int optional = 0;
 
+	// Try convert info to object
 	v8::Local<v8::Object> obj;
-	if (node2obj(info, obj)) 
-		return node2ice(s, obj, val, root);	
+	if (node2obj(info, obj))
+	{
+		// Try call write function
+		/*
+		v8::Local<v8::Value> &fwrite = obj->Get(g_v8s_write);
+		if (!fwrite.IsEmpty() && fwrite->IsFunction())
+		{
+			v8::Local<v8::Function> &f = fwrite.As<v8::Function>();
+			f->Call(val, 1, &val);
+			return;
+		}
+		*/
 
-	std::wstring str;
-	if (!node2str(info, str)) return false;
-	if (str==L"string") ICE3STR(val, s)
-	else if (str==L"byte") ICE3BYTE(val, s)
-	else if (str==L"short") ICE3SHORT(val, s)
-	else if (str==L"int") ICE3INT(val, s)
-	else if (str==L"long") ICE3LONG(val, s)
-	else if (str==L"bool") ICE3BOOL(val, s)
-	else if (str==L"double") ICE3DOUBLE(val, s)
-	else if (str==L"float") ICE3FLOAT(val, s)
-	else return false;
-	return true;
+		// Read type property and process as struct when not found
+		v8::Local<v8::Value> &vtype = obj->Get(g_v8s_type);
+		if (vtype.IsEmpty() || vtype->IsUndefined())
+			return node2ice(s, obj, val, root);
+
+		// Read other properties
+		node2int(obj->Get(g_v8s_optional), optional);
+
+		// Try convert type to object and process as struct on success
+		v8::Local<v8::Object> obj2;
+		if (node2obj(vtype, obj2))
+			return node2ice(s, obj2, val, root);
+
+		// Try convert type to string
+		if (!node2str(vtype, type)) 
+			return false;
+	}
+
+	// Try convert info to string
+	else if (!node2str(info, type)) 
+	{
+		return false;
+	}
+
+	// Process as simple type
+	bool result = true;
+	if (root) s->startEncapsulation();
+	if (type==L"string") ICE3STR(val, s)
+	else if (type==L"byte") ICE3BYTE(val, s)
+	else if (type==L"short") ICE3SHORT(val, s)
+	else if (type==L"int") ICE3INT(val, s)
+	else if (type==L"long") ICE3LONG(val, s)
+	else if (type==L"bool") ICE3BOOL(val, s)
+	else if (type==L"double") ICE3DOUBLE(val, s)
+	else if (type==L"float") ICE3FLOAT(val, s)
+	else if (type==L"array")
+	{
+		if (!obj.IsEmpty()) node2str(obj->Get(g_v8s_subtype), subtype);
+		::std::vector<::Ice::Byte> buf;
+		//buf.push_back(1);
+		//buf.push_back(1);
+		s->write(buf);
+		//buf.push_back(1);
+	}
+	else result = false;
+	if (root) s->endEncapsulation();
+	return result;
 }
 
 //-------------------------------------------------------------------------------------
@@ -106,12 +170,14 @@ class IceResult: public NodeAsync
 public:
 	std::string err;
 	Ice::InputStreamPtr strm;
+	boost::shared_ptr<NodeIceTypeBase> type;
 	v8::Persistent<v8::Value> info;
 	v8::Persistent<v8::Object> holder;
 	v8::Persistent<v8::Value> value;
 	inline IceResult() {}
 	virtual ~IceResult() {}
 	virtual void Process();
+	inline bool IsVoid() { return !type && info.IsEmpty(); }
 };
 
 void IceResult::Process() 
@@ -119,14 +185,26 @@ void IceResult::Process()
 	v8::HandleScope scope;
 
 	// Parse output stream
-	v8::Handle<v8::Value> val;
+	v8::Local<v8::Value> val;
 	if (err.empty()) 
-	try { val = ice2node(strm, info); }
+	try 
+	{ 
+		if (type) 
+		{
+			strm->startEncapsulation();
+			type->read(strm, val);
+			strm->endEncapsulation();
+		}
+		else 
+		{
+			val = ice2node(strm, info, true); 
+		}
+	}
 	catch (const Ice::UserException &e) { EXCEPTION_FORMAT(err, "Ice User ", e); }
 	catch (const Ice::LocalException &e) { EXCEPTION_FORMAT(err, "Ice Local ", e); }
 	catch (const std::exception &e) { EXCEPTION_FORMAT(err, "", e); }
 	catch (...) { err = "Unknown Exception"; }
-	if (val.IsEmpty()) val = v8::Undefined(); 
+	if (val.IsEmpty()) val = v8::Local<v8::Value>::New(v8::Undefined()); 
 	value = v8::Persistent<v8::Value>::New(val);
 	
 	// Debug message
@@ -167,7 +245,7 @@ void IceCallback::do_process(const Ice::AsyncResultPtr &r, bool async)
 		Ice::InputStreamPtr strm;
 		std::vector<Ice::Byte> outParams;
 		bool rcode = prx->end_ice_invoke(outParams, r);
-		if (!rcode || !result->info.IsEmpty())
+		if (!rcode || !result->IsVoid())
 		{
 			Ice::CommunicatorPtr &ic = r->getCommunicator();
 			if (!ic && !result->holder.IsEmpty())
@@ -178,12 +256,11 @@ void IceCallback::do_process(const Ice::AsyncResultPtr &r, bool async)
 			if (ic) strm = Ice::createInputStream(ic, outParams);
 		}
 		if (!strm) ;
-		else if (rcode) 
+		else if (rcode)
 		{
 			result->strm = strm;
 		}
-		else
-		try
+		else try
 		{
 			strm->throwException();
 
@@ -191,7 +268,7 @@ void IceCallback::do_process(const Ice::AsyncResultPtr &r, bool async)
 			//strm->startException();
 			//SlicedDataPtr ptr = strm->endException(bool preserve);
 		}
-		catch(const Ice::UnmarshalOutOfBoundsException &e)
+		catch(const Ice::UnmarshalOutOfBoundsException &)
 		{
 			result->err = "Remote User Exception (for detailed need Ice v3.5)";
 		}
@@ -244,12 +321,30 @@ v8::Handle<v8::Value> ice_initialize(const v8::Arguments& args)
 }
 */
 
-void ice_register(v8::Handle<v8::Object> target)
+void ice_node_register(v8::Handle<v8::Object> &target)
 {
 	v8::HandleScope scope;
 
 	// Register ice methods
 	//NODE_SET_METHOD(target, "initialize", ice_initialize);
+
+	// Register ice simple types
+	NodeIceTypeT<NodeIceSimpleT<Ice::Byte> >::node_register(target, "Byte", true);
+	NodeIceTypeT<NodeIceSimpleT<Ice::Int> >::node_register(target, "Int", true);
+	NodeIceTypeT<NodeIceSimpleT<Ice::Long> >::node_register(target, "Long", true);
+	NodeIceTypeT<NodeIceSimpleT<Ice::Double> >::node_register(target, "Double", true);
+	NodeIceTypeT<NodeIceSimpleT<Ice::Float> >::node_register(target, "Float", true);
+	NodeIceTypeT<NodeIceSimpleT<std::wstring> >::node_register(target, "String", true);
+	NodeIceTypeT<NodeIceSimpleT<bool> >::node_register(target, "Bool", true);
+
+	// Register ice other types
+	NodeIceTypeT<NodeIceSequence>::node_register(target, "Sequence", false);
+	NodeIceTypeT<NodeIceParam>::node_register(target, "Field", false);
+	NodeIceTypeT<NodeIceParam>::node_register(target, "Argument", false);
+	NodeIceTypeT<NodeIceMethod>::node_register(target, "Method", false);
+	NodeIceTypeT<NodeIceClass>::node_register(target, "Class", false);
+	NodeIceTypeT<NodeIceClass>::node_register(target, "Struct", false);
+	NodeIceTypeT<NodeIceClass>::node_register(target, "Interface", false);
 
 	// Register ice Communicator
 	v8::Local<v8::FunctionTemplate> f_communicator = v8::FunctionTemplate::New(NodeIceCommunicator::node_init);
@@ -274,6 +369,189 @@ void ice_register(v8::Handle<v8::Object> target)
 	target->Set(v8::String::NewSymbol("Proxy"), f_proxy->GetFunction());
 
 	NODE_DEBUG_MSG("NodeIce registered");
+}
+
+//-------------------------------------------------------------------------------------------------------
+// NodeIceTypeT
+
+
+template<typename T>
+void NodeIceTypeT<T>::node_register(v8::Handle<v8::Object> &target, const char *name, bool as_instance)
+{
+	v8::HandleScope scope;
+	v8::Local<v8::String> &id = v8::String::NewSymbol(name);
+	v8::Local<v8::FunctionTemplate> &t_func = v8::FunctionTemplate::New(NodeIceTypeT::node_init_on_create);
+	v8::Local<v8::ObjectTemplate> &t_obj = t_func->InstanceTemplate();
+	t_obj->SetInternalFieldCount(1);
+	t_obj->Set("__ice", target);
+	t_func->SetClassName(id);
+
+	//NODE_SET_PROTOTYPE_METHOD(f_communicator, "done", NodeIceCommunicator::node_done);
+	//NODE_SET_PROTOTYPE_METHOD(f_communicator, "stringToProxy", NodeIceCommunicator::node_stringToProxy);
+	//NODE_SET_PROTOTYPE_METHOD(f_communicator, "propertyToProxy", NodeIceCommunicator::node_propertyToProxy);
+
+	if (as_instance) target->Set(id, t_obj->NewInstance());
+	else target->Set(id, t_func->GetFunction());
+}
+
+template<typename T>
+void NodeIceTypeT<T>::init_on_create(const v8::Arguments& args)
+{
+	init(args);
+}
+
+void NodeIceTypeBase::init(const v8::Arguments& args)
+{
+	v8::HandleScope scope;
+	v8::Local<v8::Object> info;
+	v8::Local<v8::Object> &me = args.This();
+	if (args2obj(args, 0, info)) objenum_w(info, [this, &me](std::wstring &key, v8::Local<v8::Value> &val)->bool{
+		this->set(me, key, val);
+		return true;
+	});
+	else for(int i = 0; i < args.Length(); i ++)
+	{
+		v8::Local<v8::Value> &val = args[i];
+		std::wstring key;
+		key = i;
+		set(me, key, val);
+	}
+}
+
+NodeIceTypeBase *NodeIceTypeBase::create(v8::Handle<v8::Value> &info)
+{
+	v8::HandleScope scope;
+	NodeIceTypeBase *ptr = node2_t<NodeIceTypeBase>(info);
+	if (ptr) return ptr->clone();
+	std::wstring str;
+	node2str(info, str);
+	if (str==L"string") return new NodeIceSimpleT<std::wstring>();
+	if (str==L"byte") return new NodeIceSimpleT<Ice::Byte>();
+	if (str==L"short") return new NodeIceSimpleT<Ice::Short>();
+	if (str==L"int") return new NodeIceSimpleT<Ice::Int>();
+	if (str==L"long") return new NodeIceSimpleT<Ice::Long>();
+	if (str==L"bool") return new NodeIceSimpleT<bool>();
+	if (str==L"double") return new NodeIceSimpleT<Ice::Double>();
+	if (str==L"float") return new NodeIceSimpleT<Ice::Float>();
+	return 0;
+}
+
+void NodeIceSequence::init(const v8::Arguments& args)
+{
+	v8::HandleScope scope;
+	int argcnt = args.Length();
+	int argindex = -1;
+
+	// Process type
+	if (++argindex < argcnt)
+		type.reset(NodeIceTypeBase::create(args[argindex]));
+}
+
+bool NodeIceSequence::write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p)
+{
+	int cnt;
+	v8::Local<v8::Object> obj;
+	if (!type || !node2obj(p, obj) || !node2int(obj->Get(g_v8s_length), cnt)) cnt = 0;
+	s->writeSize(cnt);
+	for (int i = 0; i < cnt; i ++)
+	{
+		v8::Local<v8::Value> &pi = obj->Get(i);
+		type->write(s, pi);
+	}
+	return true;
+}
+
+void NodeIceParam::init(const v8::Arguments& args)
+{
+	v8::HandleScope scope;
+	int argcnt = args.Length();
+	int argindex = -1;
+
+	// Process name
+	if (++argindex < argcnt) 
+		node2str(args[argindex], name);
+
+	// Process type
+	if (++argindex < argcnt)
+		type.reset(NodeIceTypeBase::create(args[argindex]));
+
+	// Process optional
+	if (++argindex < argcnt)
+		node2int(args[argindex], optional);
+}
+
+void NodeIceMethod::clear()
+{
+	if (type) type.reset();
+	std::for_each(params.begin(), params.end(), [](NodeIceTypeBase *&it){
+		if (it) { delete it; it = 0; }
+	});
+}
+
+void NodeIceMethod::init(const v8::Arguments& args)
+{
+	v8::HandleScope scope;
+	int len, argcnt = args.Length();
+	for(int i = 0; i < argcnt; i ++)
+	{
+		v8::Local<v8::Value> &val = args[i];
+
+		// Test for object argument
+		v8::Local<v8::Object> obj;
+		if (node2obj(val, obj))
+		{
+			// Try process as array of parameters - it`s end of arguments
+			v8::Local<v8::Value> &vlen = obj->Get(g_v8s_length);
+			if (node2int(vlen, len) && len > 0)
+			{
+				for (int i = 0; i < len; i ++)
+				{
+					v8::Local<v8::Value> &param = obj->Get(i);
+					NodeIceTypeBase *ptype = node2_t<NodeIceTypeBase>(param);
+					if (ptype) params.push_back(ptype->clone());
+					else params.push_back(new NodeIceParam(param));
+				}
+				break;
+			}
+		}
+
+		// Process arguments
+		switch (i)
+		{
+		case 0:
+			type.reset(new NodeIceParam(val));
+			break;
+		case 1:
+			node2int(val, mode);
+			break;
+		}
+	}
+}
+
+bool NodeIceMethod::write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p)
+{
+	int cnt = 0;
+	bool rcode = true;
+	v8::Local<v8::Object> obj;
+	node2obj(p, obj);
+	s->startEncapsulation();
+	std::for_each(params.begin(), params.end(), [&s, &cnt, &obj, &rcode](NodeIceTypeBase *param){
+		if (!rcode) return;
+		v8::Local<v8::Value> p;
+		if (!obj.IsEmpty()) p = obj->Get(cnt);
+		if (!param->write(s, p)) rcode = false;
+		cnt ++;
+	});
+	s->endEncapsulation();
+	return rcode;
+}
+
+void NodeIceClass::set(v8::Local<v8::Object> &me, std::wstring &key, v8::Local<v8::Value> &val)
+{
+	//me->Set(v8::String::New((uint16_t*)key.c_str(), key.length()), val);
+	NodeIceTypeBase *ptype = node2_t<NodeIceTypeBase>(val);
+	if (ptype) items[key] = ptype->clone();
+	else items[key] = new NodeIceParam(val);
 }
 
 //-------------------------------------------------------------------------------------------------------
@@ -302,7 +580,7 @@ void NodeIceCommunicator::done()
   * this function is called when the communicator function is called as a constructor.
   * usage: var foo = new Communicator("...");
   */
-v8::Handle<v8::Value> NodeIceCommunicator::init(const v8::Arguments& args)
+void NodeIceCommunicator::init(const v8::Arguments& args)
 {
 	NODE_DEBUG_MSG("Ice.Communicator::New");
 	options.properties = Ice::createProperties();
@@ -314,8 +592,7 @@ v8::Handle<v8::Value> NodeIceCommunicator::init(const v8::Arguments& args)
 		if (!args2func(args, 0, func))
 		{
 			std::string str;
-			if (args2str(args, 0, str))
-				options.properties->load(str);
+			if (args2str(args, 0, str)) options.properties->load(str);
 		}
 	}
 	else objenum(params, [this, &func] (std::string &name, v8::Local<v8::Value> &value)->bool 
@@ -341,7 +618,6 @@ v8::Handle<v8::Value> NodeIceCommunicator::init(const v8::Arguments& args)
 	//else on_init.reset();
 
 	ic = Ice::initialize(options);
-	return scope.Close(args.This());
 }
 
 /**
@@ -423,11 +699,9 @@ void NodeIceProxy::done()
 	if (prx) prx = 0;
 }
 
-v8::Handle<v8::Value> NodeIceProxy::init(const v8::Arguments& args)
+void NodeIceProxy::init(const v8::Arguments& args)
 {
 	NODE_DEBUG_MSG("Ice.Proxy::New");
-	v8::HandleScope scope;	
-	return scope.Close(args.This());
 }
 
 v8::Handle<v8::Value> NodeIceProxy::invoke(const v8::Arguments &args)
@@ -438,6 +712,7 @@ v8::Handle<v8::Value> NodeIceProxy::invoke(const v8::Arguments &args)
 	// Prepare invocation arguments
 	int mode = Ice::Normal;
 	std::string name;
+	NodeIceMethod *method = 0;
 	v8::Local<v8::Value> retinfo;
 	v8::Local<v8::Value> arginfo;
 	v8::Local<v8::Value> arguments;
@@ -450,17 +725,19 @@ v8::Handle<v8::Value> NodeIceProxy::invoke(const v8::Arguments &args)
 			args2str(args, 0, name);
 		}
 	}
-	else objenum(options, [&name, &mode, &func, &retinfo, &arginfo, &arguments] (std::string &key, v8::Local<v8::Value> &value)->bool
+	else objenum(options, [&name, &method, &mode, &func, &retinfo, &arginfo, &arguments] (std::string &key, v8::Local<v8::Value> &value)->bool
 	{
 		if (key == "name") node2str(value, name);
-		else if (key == "mode") node2int(value, mode);
-		else if (key == "result") retinfo = value;
-		else if (key == "callback") node2func(value, func);
-		else if (key == "params") arginfo = value;
 		else if (key == "args") arguments = value;
 		else if (key == "arg") arguments = value;
+		else if (key == "info") method = node2_t<NodeIceMethod>(value);
+		else if (key == "mode") node2int(value, mode);
+		else if (key == "result") retinfo = value;
+		else if (key == "params") arginfo = value;
+		else if (key == "callback") node2func(value, func);
 		return true;
 	});
+	if (method) mode = method->mode;
 	if (func.IsEmpty()) args2func(args, 1, func);
 	bool async = !func.IsEmpty();
 
@@ -468,7 +745,8 @@ v8::Handle<v8::Value> NodeIceProxy::invoke(const v8::Arguments &args)
 	IceResult *result = new IceResult();
 	result->holder = v8::Persistent<v8::Object>::New(args.Holder());
 	if (async) result->ptr.reset(new NodeCallback(args.This(), func));
-	if (!retinfo.IsEmpty()) result->info = v8::Persistent<v8::Value>::New(retinfo);
+	if (method) result->type = method->type;
+	else if (!retinfo.IsEmpty()) result->info = v8::Persistent<v8::Value>::New(retinfo);
 	IceCallbackPtr resultptr(new IceCallback(result));
 
 	// Begin invocation asynchronically
@@ -477,18 +755,29 @@ v8::Handle<v8::Value> NodeIceProxy::invoke(const v8::Arguments &args)
 	{
 		std::vector<Ice::Byte> inParams;
 
-		Ice::OutputStreamPtr &s = Ice::createOutputStream(ic);
 		/*
+		Ice::OutputStreamPtr &s = Ice::createOutputStream(ic);
+		s->startEncapsulation();
 		s->write("testttt");
 		s->write(Ice::Int(5000));
 		//s->startEncapsulation();
-		s->write(Ice::Long(5000));
-		s->write("111");
-		s->write(Ice::Double(0));
-		//s->endEncapsulation();
+		//s->write(Ice::Long(5000));
+		//s->write("111");
+		//s->write(Ice::Double(0));
+		s->endEncapsulation();
 		s->finished(inParams);
 		*/
-		if (!arginfo.IsEmpty() && !arginfo->IsUndefined() && !arginfo->IsNull())
+
+		if (method)
+		{
+			if (method->IsArguments())
+			{
+				Ice::OutputStreamPtr &s = Ice::createOutputStream(ic);
+				if (method->write(s, arguments)) 
+					s->finished(inParams);
+			}
+		}
+		else if (!arginfo.IsEmpty() && !arginfo->IsUndefined() && !arginfo->IsNull())
 		{
 			Ice::OutputStreamPtr &s = Ice::createOutputStream(ic);
 			if (node2ice(s, arginfo, arguments)) 

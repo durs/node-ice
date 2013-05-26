@@ -5,8 +5,8 @@
 
 This project provides a bridge to the ZeroC ICE RPC framework.
 
-Project tested only with Node.js v 0.10.1 on Windows platform (Visual Studio 2010)
-
+Project tested only on Windows platform (Visual Studio 2010) with Node.JS 0.10.1, ZeroC Ice 3.5.0.
+	
 What follows is a simple example. Note that this hasn't yet even been fully implemented but this should give you an idea of what we're aiming for.
 
 Server slice declarations:
@@ -92,3 +92,10 @@ Ice client node.js implementation code:
 	*/
 	console.log('Storage.info: ' + storage.info());
 	console.log('Storage.format: ' + storage.format('test.users', {params: 1}, 'json'));
+
+ToDo:
+	- Implements Ice sequence<type>
+	- Correct throwing Ice user exceptions
+	- Using optional parameters
+	- Using structs and sequences as return values
+	- Search memory leaks

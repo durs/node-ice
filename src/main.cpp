@@ -8,7 +8,7 @@
 
 static void init(v8::Handle<v8::Object> target) 
 {
-	ice_register(target);
+	ice_node_register(target);
 }
 
 NODE_MODULE(ice, init);

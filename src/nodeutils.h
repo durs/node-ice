@@ -25,8 +25,9 @@
 		type *p = new type(); \
 		if (!p) return scope.Close(NODE_ERROR("Invalid node instance")); \
 		p->Wrap(args.Holder()); \
-		return scope.Close(p->callback(args)); } \
-	v8::Handle<v8::Value> callback(const v8::Arguments &args);
+		p->callback(args); \
+		return scope.Close(args.This()); } \
+	void callback(const v8::Arguments &args);
 
 #define NODE_DEFINE_METHOD(type, callback) \
 	static inline v8::Handle<v8::Value> node_##callback(const v8::Arguments &args) { \
@@ -109,7 +110,7 @@ inline bool node2int(v8::Handle<v8::Value> &val, int &value)
 	return node2int(num, value);
 }
 
-inline bool node2str(v8::String::Utf8Value &str, std::string &value)
+inline bool node2str(const v8::String::Utf8Value &str, std::string &value)
 {
 	int len = str.length();
 	value.resize(len);
@@ -117,19 +118,19 @@ inline bool node2str(v8::String::Utf8Value &str, std::string &value)
 	return true;
 }
 
-inline bool node2str(v8::Handle<v8::String> &val, std::string &value)
+inline bool node2str(const v8::Handle<v8::String> &val, std::string &value)
 {
 	if (val.IsEmpty() || val->IsNull() || val->IsUndefined()) return false;
 	return node2str(v8::String::Utf8Value(val), value);
 }
 
-inline bool node2str(v8::Handle<v8::Value> &val, std::string &value)
+inline bool node2str(const v8::Handle<v8::Value> &val, std::string &value)
 {
 	if (val.IsEmpty() || val->IsNull() || val->IsUndefined()) return false;
 	return node2str(v8::String::Utf8Value(val), value);
 }
 
-inline bool node2str(v8::Handle<v8::String> &str, std::wstring &value)
+inline bool node2str(const v8::Handle<v8::String> &str, std::wstring &value)
 {
 	if (str.IsEmpty()) return false;
 	int len = str->Length();
@@ -138,7 +139,7 @@ inline bool node2str(v8::Handle<v8::String> &str, std::wstring &value)
 	return true;
 }
 
-inline bool node2str(v8::Handle<v8::Value> &val, std::wstring &value)
+inline bool node2str(const v8::Handle<v8::Value> &val, std::wstring &value)
 {
 	if (val.IsEmpty() || val->IsNull() || val->IsUndefined()) return false;
 	v8::Local<v8::String> &str = val->ToString();
@@ -212,18 +213,30 @@ inline bool objenum(v8::Handle<v8::Object> &obj, F func)
 		node2str(key, name);
 		return func(name, val);
 	});
-	/*
-	v8::Local<v8::Array> &keys = obj->GetOwnPropertyNames();
-	uint32_t keycnt = keys.IsEmpty() ? 0 : keys->Length();
-	for (uint32_t keyno = 0; keyno < keycnt; keyno ++)
-	{
-		std::string name;
-		v8::Local<v8::Value> &key = keys->Get(keyno);
-		if (!node2str(key, name)) continue;
-		v8::Local<v8::Value> &value = obj->Get(key);		
-		func(name, value);
-	}
-	*/
+}
+
+template<typename F>
+inline bool objenum_w(v8::Handle<v8::Object> &obj, F func)
+{
+	return objenum_t(obj, [func](v8::Local<v8::Value> &key, v8::Local<v8::Value> &val)->bool{
+		std::wstring name;
+		node2str(key, name);
+		return func(name, val);
+	});
+}
+
+template<typename T>
+inline T *node2_t(v8::Handle<v8::Object> &obj)
+{
+	node::ObjectWrap *pobj = (obj->InternalFieldCount() > 0) ? static_cast<node::ObjectWrap*>(obj->GetPointerFromInternalField(0)) : 0;
+	return (pobj != 0) ? dynamic_cast<T*>(pobj) : 0;
+}
+
+template<typename T>
+inline T *node2_t(v8::Handle<v8::Value> &val)
+{
+	v8::Local<v8::Object> obj;
+	return node2obj(val, obj) ? node2_t<T>(obj) : 0;
 }
 
 //-------------------------------------------------------------------------------------

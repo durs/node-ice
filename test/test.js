@@ -3,7 +3,7 @@
  * @description ZeroC Ice wrapper test script
  */
 
-var ice = require('./icew');
+var ice = require('../index.js');
 
 //--------------------------------------------------------------------------
 // Monitoring Slice info
@@ -33,17 +33,19 @@ var Monitoring = (function(){
 		code: 'long',
         message: 'string'
 	}
+	var ByteArray = ice.Sequence('byte');
 	var Options = {
 		params: 'long',
         userid: 'string',
         modifytime: 'double'
-	}	
+	}
 	var Service = {
-		echo: { mode: ice.mode.idempotent, result: 'string', error: Error, args: { 
-			msg: 'string', 
-			delay: 'int',
-			opt: Options
-		}}
+		echo: ice.Method('string', ice.mode.idempotent, [
+			ice.Argument('msg', 'string'), 
+			ice.Argument('delay', 'int'),
+			ice.Argument('opt', ByteArray, 1)
+			//ice.Argument('opt', Options, 1)
+		])
 	}
 	var Storage = {
 		info: { mode: ice.mode.idempotent, result: 'string', error: Error },
@@ -71,8 +73,10 @@ function test_call(func){
 		if (!ic) ic = new ice.Communicator('./test.conf');
 		if (!strg) strg = ic.propertyToProxy('Storage.Proxy', Monitoring.Storage);
 		if (!srv) srv = ic.propertyToProxy('Service.Proxy', Monitoring.Service);
+		
 		//if (!ice.initialized()) ice.init('./test.conf');
 		//if (!strg) strg = ice.communicator().propertyToProxy('Storage.Proxy');	
+		
 		var t = new Date();
 		if (strg) func(); 	
 		var src = (new Date() - t) / 1000;
@@ -84,7 +88,7 @@ function test_call(func){
 }
 
 function srv_echo(){
-	message('Service echo: ' + srv.echo('test', 5000));
+	message('Service echo: ' + srv.echo('test', 5000, [0,1,2]));
 }
 
 function strg_format(){
