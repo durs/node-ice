@@ -59,12 +59,12 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;NODEICE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;$(NODEJS_SRC)\src;$(NODEJS_SRC)\deps\v8\include;$(NODEJS_SRC)\deps\uv\include;$(BOOST_INCLUDE);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;$(NODEJS_SRC)\src;$(NODEJS_SRC)\deps\v8\include;$(NODEJS_SRC)\deps\uv\include;$(BOOST_INCLUDE);$(IceHome)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>.;$(NODEJS_SRC)\$(ConfigurationName);$(NODEJS_SRC)\$(ConfigurationName)\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>.;$(NODEJS_SRC)\$(ConfigurationName);$(NODEJS_SRC)\$(ConfigurationName)\Lib;$(IceHome)\lib\vc100;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>Iced.lib;IceUtild.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
@@ -83,14 +83,14 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;NODEICE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;$(NODEJS_SRC)\src;$(NODEJS_SRC)\deps\v8\include;$(NODEJS_SRC)\deps\uv\include;$(BOOST_INCLUDE);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;$(NODEJS_SRC)\src;$(NODEJS_SRC)\deps\v8\include;$(NODEJS_SRC)\deps\uv\include;$(BOOST_INCLUDE);$(IceHome)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>.;$(NODEJS_SRC)\$(ConfigurationName);$(NODEJS_SRC)\$(ConfigurationName)\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>.;$(NODEJS_SRC)\$(ConfigurationName);$(NODEJS_SRC)\$(ConfigurationName)\Lib;$(IceHome)\lib\vc100;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>Iced.lib;IceUtild.lib;Ice.lib;IceUtil.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
@@ -107,6 +107,11 @@
   <ItemGroup>
     <ClInclude Include="nodeutils.h" />
     <ClInclude Include="nodeice.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\lib\icew.js" />
+    <None Include="..\Readme.md" />
+    <None Include="..\test\test.js" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

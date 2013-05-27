@@ -10,13 +10,6 @@ const Ice::Float NodeIceSimpleT<Ice::Float>::defval = 0;
 const std::wstring NodeIceSimpleT<std::wstring>::defval;
 const bool NodeIceSimpleT<bool>::defval = false;
 
-static v8::Persistent<v8::String> g_v8s_type = v8::Persistent<v8::String>::New(v8::String::New("__type"));
-static v8::Persistent<v8::String> g_v8s_subtype = v8::Persistent<v8::String>::New(v8::String::New("subtype"));
-static v8::Persistent<v8::String> g_v8s_optional = v8::Persistent<v8::String>::New(v8::String::New("optional"));
-static v8::Persistent<v8::String> g_v8s_length = v8::Persistent<v8::String>::New(v8::String::New("length"));
-static v8::Persistent<v8::String> g_v8s_write = v8::Persistent<v8::String>::New(v8::String::New("write"));
-static v8::Persistent<v8::String> g_v8s_read = v8::Persistent<v8::String>::New(v8::String::New("read"));
-
 //-------------------------------------------------------------------------------------
 // Common Ice utilities
 
@@ -192,7 +185,7 @@ void IceResult::Process()
 		if (type) 
 		{
 			strm->startEncapsulation();
-			type->read(strm, val);
+			type->read(strm, val, 0);
 			strm->endEncapsulation();
 		}
 		else 
@@ -404,9 +397,8 @@ void NodeIceTypeBase::init(const v8::Arguments& args)
 {
 	v8::HandleScope scope;
 	v8::Local<v8::Object> info;
-	v8::Local<v8::Object> &me = args.This();
-	if (args2obj(args, 0, info)) objenum_w(info, [this, &me](std::wstring &key, v8::Local<v8::Value> &val)->bool{
-		this->set(me, key, val);
+	if (args2obj(args, 0, info)) objenum_w(info, [this](std::wstring &key, v8::Local<v8::Value> &val)->bool{
+		this->set(key, val);
 		return true;
 	});
 	else for(int i = 0; i < args.Length(); i ++)
@@ -414,7 +406,7 @@ void NodeIceTypeBase::init(const v8::Arguments& args)
 		v8::Local<v8::Value> &val = args[i];
 		std::wstring key;
 		key = i;
-		set(me, key, val);
+		set(key, val);
 	}
 }
 
@@ -423,6 +415,10 @@ NodeIceTypeBase *NodeIceTypeBase::create(v8::Handle<v8::Value> &info)
 	v8::HandleScope scope;
 	NodeIceTypeBase *ptr = node2_t<NodeIceTypeBase>(info);
 	if (ptr) return ptr->clone();
+
+	v8::Local<v8::Object> obj;
+	if (node2obj(info, obj)) return new NodeIceClass(obj);
+
 	std::wstring str;
 	node2str(info, str);
 	if (str==L"string") return new NodeIceSimpleT<std::wstring>();
@@ -436,6 +432,26 @@ NodeIceTypeBase *NodeIceTypeBase::create(v8::Handle<v8::Value> &info)
 	return 0;
 }
 
+template<typename T>
+bool NodeIceSimpleT<T>::write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, int opt) 
+{ 
+	if (opt != 0 && is_empty(p)) return true;
+	T value = node2ice(p, defval);
+	if (opt == 0) s->write(value); 
+	else s->write(opt, IceUtil::Optional<T>(value));
+	return true; 
+}
+
+template<typename T>
+bool NodeIceSimpleT<T>::read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, int opt) 
+{ 
+	assert(opt == 0);
+	T value; 
+	s->read(value); 
+	p = ice2node(value);
+	return true; 
+}
+
 void NodeIceSequence::init(const v8::Arguments& args)
 {
 	v8::HandleScope scope;
@@ -447,7 +463,7 @@ void NodeIceSequence::init(const v8::Arguments& args)
 		type.reset(NodeIceTypeBase::create(args[argindex]));
 }
 
-bool NodeIceSequence::write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p)
+bool NodeIceSequence::write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, int opt)
 {
 	int cnt;
 	v8::Local<v8::Object> obj;
@@ -456,7 +472,7 @@ bool NodeIceSequence::write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p)
 	for (int i = 0; i < cnt; i ++)
 	{
 		v8::Local<v8::Value> &pi = obj->Get(i);
-		type->write(s, pi);
+		type->write(s, pi, 0);
 	}
 	return true;
 }
@@ -486,6 +502,7 @@ void NodeIceMethod::clear()
 	std::for_each(params.begin(), params.end(), [](NodeIceTypeBase *&it){
 		if (it) { delete it; it = 0; }
 	});
+	params.clear();
 }
 
 void NodeIceMethod::init(const v8::Arguments& args)
@@ -528,8 +545,9 @@ void NodeIceMethod::init(const v8::Arguments& args)
 	}
 }
 
-bool NodeIceMethod::write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p)
+bool NodeIceMethod::write_params(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p)
 {
+	v8::HandleScope scope;
 	int cnt = 0;
 	bool rcode = true;
 	v8::Local<v8::Object> obj;
@@ -537,21 +555,70 @@ bool NodeIceMethod::write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p)
 	s->startEncapsulation();
 	std::for_each(params.begin(), params.end(), [&s, &cnt, &obj, &rcode](NodeIceTypeBase *param){
 		if (!rcode) return;
+		v8::HandleScope scope;
 		v8::Local<v8::Value> p;
 		if (!obj.IsEmpty()) p = obj->Get(cnt);
-		if (!param->write(s, p)) rcode = false;
+		if (!param || !param->write(s, p, 0)) rcode = false;
 		cnt ++;
 	});
 	s->endEncapsulation();
 	return rcode;
 }
 
-void NodeIceClass::set(v8::Local<v8::Object> &me, std::wstring &key, v8::Local<v8::Value> &val)
+void NodeIceClass::clear()
+{
+	std::for_each(items.begin(), items.end(), [](Item *&it){
+		if (it) { delete it; it = 0; }
+	});
+	items.clear();
+}
+
+void NodeIceClass::assign(v8::Handle<v8::Object> &obj)
+{
+	objenum_w(obj, [this](std::wstring &key, v8::Local<v8::Value> &val)->bool{
+		this->set(key, val);
+		return true;
+	});
+}
+
+void NodeIceClass::set(std::wstring &key, v8::Local<v8::Value> &val)
 {
 	//me->Set(v8::String::New((uint16_t*)key.c_str(), key.length()), val);
+
 	NodeIceTypeBase *ptype = node2_t<NodeIceTypeBase>(val);
-	if (ptype) items[key] = ptype->clone();
-	else items[key] = new NodeIceParam(val);
+	Item *item = new Item;
+	item->name = key;
+	if (ptype) item->type.reset(ptype->clone());
+	else item->type.reset(new NodeIceParam(val));
+	items.push_back(item);
+}
+
+bool NodeIceClass::write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, int opt)
+{
+	v8::HandleScope scope;
+	objenumerator objenum(p);
+	if (opt != 0 && objenum.empty()) return true; 
+	bool rcode = true;
+
+	Ice::OutputStream::size_type spbeg;
+	if (opt != 0)
+	{
+		s->writeOptional(opt, Ice::OptionalFormatFSize);
+		s->write(static_cast<Ice::Int>(0));
+		spbeg = s->pos();
+	}
+	std::for_each(items.begin(), items.end(), [&s, &rcode, &objenum](Item *item){
+		if (!rcode) return;
+		v8::HandleScope scope;
+		v8::Local<v8::Value> &p = objenum.next(item->name);
+		if (!item->type || !item->type->write(s, p, 0)) rcode = false;
+	});
+
+	if (opt != 0)
+	{
+		s->rewrite(static_cast<Ice::Int>(s->pos() - spbeg), spbeg - 4);
+	}
+	return rcode;
 }
 
 //-------------------------------------------------------------------------------------------------------
@@ -753,36 +820,51 @@ v8::Handle<v8::Value> NodeIceProxy::invoke(const v8::Arguments &args)
 	std::string err;
 	try 
 	{
-		std::vector<Ice::Byte> inParams;
-
 		/*
-		Ice::OutputStreamPtr &s = Ice::createOutputStream(ic);
-		s->startEncapsulation();
-		s->write("testttt");
-		s->write(Ice::Int(5000));
-		//s->startEncapsulation();
-		//s->write(Ice::Long(5000));
-		//s->write("111");
-		//s->write(Ice::Double(0));
-		s->endEncapsulation();
-		s->finished(inParams);
-		*/
+		std::vector<Ice::Byte> inParams2;
+		std::vector<Ice::Byte> &inParams = inParams2;
+		Ice::OutputStreamPtr &s2 = Ice::createOutputStream(ic);
+		s2->startEncapsulation();
+		s2->write("test");
 
+		//s2->write(Ice::Int(5000));
+
+		s2->write(1, IceUtil::Optional<Ice::Int>(5000));
+		//s2->writeOptional(1, Ice::OptionalFormatF4);
+		//s2->write(Ice::Int(5000));
+
+			if (s2->writeOptional(1, Ice::OptionalFormatFSize))
+			{
+				s2->write(static_cast<Ice::Int>(0));
+				Ice::OutputStream::size_type p = s2->pos();
+				s2->write(Ice::Long(127));
+				s2->write("guest");
+				s2->write(Ice::Double(1));
+				s2->rewrite(static_cast<Ice::Int>(s2->pos() - p), p - 4);
+			}
+
+		s2->endEncapsulation();
+		s2->finished(inParams2);
+		/*/
+
+		//*
+		std::vector<Ice::Byte> inParams;
 		if (method)
 		{
 			if (method->IsArguments())
 			{
 				Ice::OutputStreamPtr &s = Ice::createOutputStream(ic);
-				if (method->write(s, arguments)) 
+				if (method->write_params(s, arguments)) 
 					s->finished(inParams);
 			}
 		}
-		else if (!arginfo.IsEmpty() && !arginfo->IsUndefined() && !arginfo->IsNull())
+		else if (!is_empty(arginfo))
 		{
 			Ice::OutputStreamPtr &s = Ice::createOutputStream(ic);
 			if (node2ice(s, arginfo, arguments)) 
 				s->finished(inParams);
 		}
+		//*/
 
 		if (async)
 		{

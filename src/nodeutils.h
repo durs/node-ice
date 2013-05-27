@@ -9,6 +9,15 @@
 
 //-------------------------------------------------------------------------------------
 
+extern v8::Persistent<v8::String> g_v8s_length;
+extern v8::Persistent<v8::String> g_v8s_type;
+extern v8::Persistent<v8::String> g_v8s_subtype;
+extern v8::Persistent<v8::String> g_v8s_optional;
+extern v8::Persistent<v8::String> g_v8s_write;
+extern v8::Persistent<v8::String> g_v8s_read;
+
+//-------------------------------------------------------------------------------------
+
 //#define NODE_DEBUG_(strm, msg) strm << msg << std::endl;
 
 #define NODE_DEBUG_(strm, msg) { std::string s("### "); s+=(msg); s+="\r\n"; strm.write(s.c_str(), s.size()); }
@@ -64,6 +73,10 @@ inline std::wstring str2str(std::string &src)
 }
 
 //-------------------------------------------------------------------------------------
+inline bool is_empty(const v8::Handle<v8::Value> &v)
+{
+	return v.IsEmpty() || v->IsUndefined() || v->IsNull();
+}
 
 inline bool node2dbl(v8::Handle<v8::Number> &num, double &value)
 {
@@ -74,7 +87,7 @@ inline bool node2dbl(v8::Handle<v8::Number> &num, double &value)
 
 inline bool node2dbl(v8::Handle<v8::Value> &val, double &value)
 {
-	if (val.IsEmpty() || val->IsNull() || val->IsUndefined()) return false;
+	if (is_empty(val)) return false;
 	v8::Local<v8::Number> &num = val->ToNumber();
 	if (num.IsEmpty()) return false;
 	return node2dbl(num, value);
@@ -89,7 +102,7 @@ inline bool node2int(v8::Handle<v8::Integer> &num, __int64 &value)
 
 inline bool node2int(v8::Handle<v8::Value> &val, __int64 &value)
 {
-	if (val.IsEmpty() || val->IsNull() || val->IsUndefined()) return false;
+	if (is_empty(val)) return false;
 	v8::Local<v8::Integer> &num = val->ToInteger();
 	if (num.IsEmpty()) return false;
 	return node2int(num, value);
@@ -104,7 +117,7 @@ inline bool node2int(v8::Handle<v8::Int32> &num, int &value)
 
 inline bool node2int(v8::Handle<v8::Value> &val, int &value)
 {
-	if (val.IsEmpty() || val->IsNull() || val->IsUndefined()) return false;
+	if (is_empty(val)) return false;
 	v8::Local<v8::Int32> &num = val->ToInt32();
 	if (num.IsEmpty()) return false;
 	return node2int(num, value);
@@ -120,13 +133,13 @@ inline bool node2str(const v8::String::Utf8Value &str, std::string &value)
 
 inline bool node2str(const v8::Handle<v8::String> &val, std::string &value)
 {
-	if (val.IsEmpty() || val->IsNull() || val->IsUndefined()) return false;
+	if (is_empty(val)) return false;
 	return node2str(v8::String::Utf8Value(val), value);
 }
 
 inline bool node2str(const v8::Handle<v8::Value> &val, std::string &value)
 {
-	if (val.IsEmpty() || val->IsNull() || val->IsUndefined()) return false;
+	if (is_empty(val)) return false;
 	return node2str(v8::String::Utf8Value(val), value);
 }
 
@@ -141,7 +154,7 @@ inline bool node2str(const v8::Handle<v8::String> &str, std::wstring &value)
 
 inline bool node2str(const v8::Handle<v8::Value> &val, std::wstring &value)
 {
-	if (val.IsEmpty() || val->IsNull() || val->IsUndefined()) return false;
+	if (is_empty(val)) return false;
 	v8::Local<v8::String> &str = val->ToString();
 	if (str.IsEmpty()) return false;
 	return node2str(str, value);
@@ -196,7 +209,6 @@ inline bool objenum_t(v8::Handle<v8::Object> &obj, F func)
 	uint32_t keycnt = keys.IsEmpty() ? 0 : keys->Length();
 	for (uint32_t keyno = 0; keyno < keycnt; keyno ++)
 	{
-		std::string name;
 		v8::Local<v8::Value> &key = keys->Get(keyno);
 		v8::Local<v8::Value> &val = obj->Get(key);
 		rcode = func(key, val);
@@ -224,6 +236,63 @@ inline bool objenum_w(v8::Handle<v8::Object> &obj, F func)
 		return func(name, val);
 	});
 }
+
+class objenumerator
+{
+public:
+	inline objenumerator(v8::Local<v8::Object> &o): index(0), obj(o) { init(); }
+	inline objenumerator(v8::Local<v8::Value> &v): index(0) { node2obj(v, obj); init(); }
+
+	inline bool empty()
+	{
+		return length == 0 && keycnt == 0;
+	}
+
+	inline v8::Local<v8::Value> next()
+	{
+		v8::HandleScope scope;
+		if (index < length) return scope.Close(obj->Get(index++));
+		if (index < keycnt) return scope.Close(obj->Get(keys->Get(index++)));
+		index ++;
+		return scope.Close(v8::Undefined());
+	}
+
+	inline v8::Local<v8::Value> next(const v8::Handle<v8::Value> &key)
+	{
+		v8::HandleScope scope;
+		if (length != 0) return scope.Close(next());
+		if (!key.IsEmpty() && keycnt > 0) return scope.Close(obj->Get(key));
+		return scope.Close(v8::Undefined());		
+	}
+
+	inline v8::Local<v8::Value> next(const std::wstring &key)
+	{
+		v8::HandleScope scope;
+		if (length != 0) return scope.Close(next());
+		if (!key.empty() && keycnt > 0) return scope.Close(next(v8::String::New((uint16_t*)key.c_str(), key.length())));
+		return scope.Close(v8::Undefined());		
+	}
+
+private:
+	v8::Local<v8::Object> obj;
+	v8::Local<v8::Array> keys;
+	uint32_t keycnt, length, index;
+
+	inline void init()
+	{
+		v8::HandleScope scope;
+		length = keycnt = 0;
+		if (obj.IsEmpty()) return;
+		v8::Local<v8::Value> &vlen = obj->Get(g_v8s_length);
+		if (!vlen.IsEmpty()) length = vlen->Int32Value();
+		if (length == 0) 
+		{
+			keys = obj->GetOwnPropertyNames();
+			if (!keys.IsEmpty()) keycnt = keys->Length();
+		}
+	}
+};
+
 
 template<typename T>
 inline T *node2_t(v8::Handle<v8::Object> &obj)

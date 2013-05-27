@@ -9,12 +9,19 @@ var ice = require('../index.js');
 // Monitoring Slice info
 
 /*
-    struct Options
+	sequence<byte> ByteArray;
+
+	struct Options
 	{
 		long params;
 		string userid;
 		double modifytime;
-		//Item filter;
+	};
+
+	interface Service
+	{
+		void shutdown();
+		idempotent string echo(string msg, optional(1) int delay, optional(2) Options opt);
 	};
 
     interface Storage
@@ -39,12 +46,13 @@ var Monitoring = (function(){
         userid: 'string',
         modifytime: 'double'
 	}
-	var Service = {
+    var Service = {
+        shutdown: ice.Method(),
 		echo: ice.Method('string', ice.mode.idempotent, [
 			ice.Argument('msg', 'string'), 
-			ice.Argument('delay', 'int'),
-			ice.Argument('opt', ByteArray, 1)
-			//ice.Argument('opt', Options, 1)
+			ice.Argument('delay', 'int', 1),
+			ice.Argument('opt', Options, 2)
+		//ice.Argument('opt', ByteArray, 1)
 		])
 	}
 	var Storage = {
@@ -88,7 +96,7 @@ function test_call(func){
 }
 
 function srv_echo(){
-	message('Service echo: ' + srv.echo('test', 5000, [0,1,2]));
+    message('Service echo: ' + srv.echo('test', null, { params: 127, userid: "guest", modifytime: 1 }));
 }
 
 function strg_format(){

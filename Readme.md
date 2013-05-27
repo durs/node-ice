@@ -13,22 +13,19 @@ Server slice declarations:
 
 	module Monitoring
 	{
-		exception Error
-		{
-			int code;
-			string message;
-		};
-	
+		sequence<byte> ByteArray;
+
 		struct Options
 		{
 			long params;
 			string userid;
+			double modifytime;
 		};
 
-		interface Storage
+		interface Service
 		{
-			["ami", "amd"] idempotent string info() throws Error;
-			["ami", "amd"] idempotent string format(string name, Options opt, string fmt) throws Error;			
+			void shutdown();
+			idempotent string echo(string msg, optional(1) int delay, optional(2) Options opt);
 		};
 	}
 
@@ -40,26 +37,24 @@ Ice client node.js implementation code:
 	* javascript analog slice declarations
 	*/
 	var Monitoring = (function(){
-		var Error = {
-			code: 'int',
-			message: 'string'
-		}
+		var ByteArray = ice.Sequence('byte');
 		var Options = {
 			params: 'long',
 			userid: 'string',
-		}	
-		var Storage = {
-			info: { mode: ice.mode.idempotent, result: 'string', error: Error },
-			format: { mode: ice.mode.idempotent, result: 'string', error: Error, args:{
-				name: 'string',
-				opt: Options,
-				fmt: 'string'
-			}}
+			modifytime: 'double'
+		}
+		var Service = {
+			shutdown: ice.Method(),
+			echo: ice.Method('string', ice.mode.idempotent, [
+				ice.Argument('msg', 'string'), 
+				ice.Argument('delay', 'int', 1),
+				ice.Argument('opt', Options, 2)
+			])
 		}
 		return {
-			Error: Error,
+			ByteArray: ByteArray,
 			Options: Options,
-			Storage: Storage
+			Service: Service
 		}
 	})();
 	
@@ -78,24 +73,28 @@ Ice client node.js implementation code:
 		//new ice.Communicator('./test.conf');
 		
 	/**
-	* create ice object proxy 
+	* create ice object proxy
+	* examples:
+	*     communicator.propertyToProxy('Storage.Proxy', Monitoring.Service);												// from configuration property
+	*     communicator.stringToProxy('service:tcp -h localhost -p 10000:udp -h localhost -p 10000', Monitoring.Service);	// from string
 	*/
-	var storage = 
-		// from configuration property
-		communicator.propertyToProxy('Storage.Proxy', Monitoring.Storage);
-		
-		// or from string
-		//communicator.stringToProxy('service:tcp -h localhost -p 10000:udp -h localhost -p 10000', Monitoring.Storage);
+	var service = communicator.propertyToProxy('Storage.Proxy', Monitoring.Service);
 
 	/**
 	* invoke ice object methods
+	* examples: 
+	*    service.echo("Hello"); 
+	*    service.echo("Hello", 5000, {userid:'guest'});
+	*    service.echo("Hello", null, [0, 'guest']));
 	*/
-	console.log('Storage.info: ' + storage.info());
-	console.log('Storage.format: ' + storage.format('test.users', {params: 1}, 'json'));
+	var result = service.echo("Hello", 1000);
+	service.shutdown();
+
+
 
 ToDo:
-	- Implements Ice sequence<type>
-	- Correct throwing Ice user exceptions
-	- Using optional parameters
-	- Using structs and sequences as return values
-	- Search memory leaks
+	- Correct throwing Ice user exceptions;
+	- Using structs and sequences as return values;
+	- Test optional parameters: in structures fields, with sequences, at the begin of definition, on reordering tags;
+	- Test sequences of structs;
+	- Search memory leaks;
