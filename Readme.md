@@ -7,7 +7,7 @@ This project provides a bridge to the ZeroC ICE RPC framework.
 
 Project tested only on Windows platform (Visual Studio 2010) with Node.JS 0.10.1, ZeroC Ice 3.5.0.
 	
-What follows is a simple example. Note that this hasn't yet even been fully implemented but this should give you an idea of what we're aiming for.
+What follows is a simple example.
 
 Server slice declarations:
 
