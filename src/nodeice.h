@@ -54,25 +54,20 @@ inline v8::Local<v8::Value> ice2node(const std::wstring &v) { v8::HandleScope sc
 
 //-------------------------------------------------------------------------------------
 
-template<typename T>
-class NodeIceTypeT: public node::ObjectWrap, public T
-{
-public:
-	static void node_register(v8::Handle<v8::Object> &target, const char *name, bool as_instance);
-	NODE_DEFINE_CONSTRUCTOR(NodeIceTypeT, init_on_create)
-};
+class NodeIceTypeBase;
+typedef boost::shared_ptr<NodeIceTypeBase> NodeIceTypePtr;
 
 class NodeIceTypeBase
 {
 public:
-	static NodeIceTypeBase *create(v8::Handle<v8::Value> &info);
+	static NodeIceTypePtr create(v8::Handle<v8::Value> &info);
+
 	virtual ~NodeIceTypeBase() {}
 
 	virtual void init(const v8::Arguments& args);
-	virtual void set(std::wstring &key, v8::Local<v8::Value> &val) {}
+	virtual void set(const v8::Local<v8::Value> &key, v8::Local<v8::Value> &val) {}
 	virtual bool write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, int opt) { assert(false); return false; }
 	virtual bool read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, int opt) { assert(false); return false; }
-	virtual NodeIceTypeBase *clone() { assert(false); return 0; }
 };
 
 template<typename T>
@@ -82,7 +77,6 @@ public:
 	static const T defval;
 	virtual bool write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, int opt);
 	virtual bool read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, int opt);
-	virtual NodeIceTypeBase *clone() { return new NodeIceSimpleT<T>(); }
 };
 
 class NodeIceSequence: public NodeIceTypeBase
@@ -94,10 +88,26 @@ public:
 
 	virtual void init(const v8::Arguments& args);
 	virtual bool write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, int opt);
-	virtual NodeIceTypeBase *clone() { return new NodeIceSequence(*this); }
+	virtual bool read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, int opt);
 
 private:
-	boost::shared_ptr<NodeIceTypeBase> type;
+	NodeIceTypePtr type;
+};
+
+class NodeIceDictionary: public NodeIceTypeBase
+{
+public:
+	inline NodeIceDictionary() {}
+	inline NodeIceDictionary(const NodeIceDictionary &v): key_type(v.key_type), value_type(v.value_type) {}
+	virtual ~NodeIceDictionary() {}
+
+	virtual void init(const v8::Arguments& args);
+	virtual bool write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, int opt);
+	virtual bool read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, int opt);
+
+private:
+	NodeIceTypePtr key_type;
+	NodeIceTypePtr value_type;
 };
 
 class NodeIceParam: public NodeIceTypeBase
@@ -110,55 +120,68 @@ public:
 	virtual void init(const v8::Arguments& args);
 	virtual bool write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, int opt) { return (type!=0) ? type->write(s, p, optional) : false; }
 	virtual bool read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, int opt) { return (type!=0) ? type->read(s, p, optional) : false; }
-	virtual NodeIceTypeBase *clone() { return new NodeIceParam(*this); }
 
 private:
 	std::wstring name;
-	boost::shared_ptr<NodeIceTypeBase> type;
+	NodeIceTypePtr type;
 	int optional;
 };
 
 class NodeIceMethod: public NodeIceTypeBase
 {
 public:
-	typedef std::vector<NodeIceTypeBase*> Params;
-	boost::shared_ptr<NodeIceTypeBase> type;
+	typedef std::vector<NodeIceTypePtr> Params;
+	NodeIceTypePtr type;
 	Params params;
 	int mode;
 
 	inline NodeIceMethod() {}
-	virtual ~NodeIceMethod() { clear(); }
 	inline bool IsArguments() { return !params.empty(); }
-	void clear();
 	bool write_params(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p);
 
 	virtual void init(const v8::Arguments& args);
 	virtual bool write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, int opt) { return true; }
 	virtual bool read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, int opt) { return true; }
-	//virtual NodeIceTypeBase *clone() { return 0; }
 };
 
-class NodeIceClass: public NodeIceTypeBase
+class NodeIceStruct: public NodeIceTypeBase
 {
 public:
-	inline NodeIceClass() {}
-	inline NodeIceClass(v8::Handle<v8::Object> &obj) { assign(obj); }
-	virtual ~NodeIceClass() { clear(); }
+	inline NodeIceStruct() {}
+	inline NodeIceStruct(v8::Handle<v8::Object> &obj) { assign(obj); }
+	virtual ~NodeIceStruct() { clear(); }
 	void clear();
 
-	virtual void set(std::wstring &key, v8::Local<v8::Value> &val);
+	virtual void set(const v8::Local<v8::Value> &key, v8::Local<v8::Value> &val);
 	virtual bool write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, int opt);
-	//virtual NodeIceTypeBase *clone();
+	virtual bool read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, int opt);
 
 private:
 	struct Item
 	{
 		std::wstring name;
-		boost::shared_ptr<NodeIceTypeBase> type;
+		v8::Persistent<v8::Value> key;
+		NodeIceTypePtr type;
 	};
 	typedef std::vector<Item*> Items; 
 	Items items;
 	void assign(v8::Handle<v8::Object> &obj);
+};
+
+//-------------------------------------------------------------------------------------
+
+class NodeIceTypeWrap: public node::ObjectWrap
+{
+public:
+	NodeIceTypePtr type;
+};
+
+template<typename T>
+class NodeIceTypeT: public NodeIceTypeWrap
+{
+public:
+	static void node_register(v8::Handle<v8::Object> &target, const char *name, bool as_instance);
+	NODE_DEFINE_CONSTRUCTOR(NodeIceTypeT, init)
 };
 
 //-------------------------------------------------------------------------------------

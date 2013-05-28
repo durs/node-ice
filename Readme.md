@@ -75,8 +75,10 @@ Ice client node.js implementation code:
 	/**
 	* create ice object proxy
 	* examples:
-	*     communicator.propertyToProxy('Storage.Proxy', Monitoring.Service);												// from configuration property
-	*     communicator.stringToProxy('service:tcp -h localhost -p 10000:udp -h localhost -p 10000', Monitoring.Service);	// from string
+	*     // from configuration property
+	*     communicator.propertyToProxy('Storage.Proxy', Monitoring.Service);												
+	*     // from string
+	*     communicator.stringToProxy('service:tcp -h localhost -p 10000:udp -h localhost -p 10000', Monitoring.Service);	
 	*/
 	var service = communicator.propertyToProxy('Storage.Proxy', Monitoring.Service);
 
@@ -92,9 +94,14 @@ Ice client node.js implementation code:
 
 
 
-ToDo:
-	- Correct throwing Ice user exceptions;
-	- Using structs and sequences as return values;
-	- Test optional parameters: in structures fields, with sequences, at the begin of definition, on reordering tags;
-	- Test sequences of structs;
+ToDo: 
+
+	- Implemets ice class & ice user exception; 
+
+	- Test optional parameters: with sequence, with dictonary, at the begin of definition, on reordering tags;
+
+	- Automatically parsing slice file into javascript
+
+	- Implements server features
+
 	- Search memory leaks;

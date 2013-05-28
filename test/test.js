@@ -6,9 +6,11 @@
 var ice = require('../index.js');
 
 //--------------------------------------------------------------------------
-// Monitoring Slice info
+// Monitoring Slice info (javascript analog)
 
 /*
+module Monitoring
+{
 	sequence<byte> ByteArray;
 
 	struct Options
@@ -18,10 +20,24 @@ var ice = require('../index.js');
 		double modifytime;
 	};
 
+    struct Item
+	{
+		string id;
+		double modifytime;
+		Properties props;
+	};
+
+	sequence<Item> ItemArray;
+
 	interface Service
 	{
 		void shutdown();
 		idempotent string echo(string msg, optional(1) int delay, optional(2) Options opt);
+		idempotent Options testStruct();
+		idempotent IntValue testClass();
+		idempotent ByteArray testSequence();
+		idempotent Properties testDictionary();
+		idempotent void testException(int code, string msg) throws Error;
 	};
 
     interface Storage
@@ -33,42 +49,65 @@ var ice = require('../index.js');
 
 		void addObserver(Ice::Identity id);
 	};
+}
 */
 
-var Monitoring = (function(){
-	var Error = {
-		code: 'long',
-        message: 'string'
-	}
-	var ByteArray = ice.Sequence('byte');
-	var Options = {
-		params: 'long',
+var Monitoring = (function () {
+
+    var ByteArray = ice.Sequence('byte');
+
+    var Options = {
+        params: 'long',
         userid: 'string',
         modifytime: 'double'
-	}
+    }
+
+    var Value = {
+        type: 'short',
+        val: 'string'
+    }
+
+    var Properties = ice.Dictionary('string', Value);
+
+    var Item = {
+		id: 'string',
+		modifytime: 'double',
+		props: Properties
+    }
+
+    var ItemArray = ice.Sequence(Item);
+
     var Service = {
         shutdown: ice.Method(),
-		echo: ice.Method('string', ice.mode.idempotent, [
-			ice.Argument('msg', 'string'), 
+        echo: ice.Method('string', ice.mode.idempotent, [
+			ice.Argument('msg', 'string'),
 			ice.Argument('delay', 'int', 1),
 			ice.Argument('opt', Options, 2)
-		//ice.Argument('opt', ByteArray, 1)
-		])
-	}
-	var Storage = {
-		info: { mode: ice.mode.idempotent, result: 'string', error: Error },
-		format: { mode: ice.mode.idempotent, result: 'string', error: Error, args:{
-			name: 'string',
-			opt: Options,
-			fmt: 'string'
-		}}
-	}
-	return {
-		Error: Error,
-		Options: Options,
-		Storage: Storage,
-		Service: Service
-	}
+		]),
+        testStruct: ice.Method(Options, ice.mode.idempotent),
+        testClass: ice.Method(null, ice.mode.idempotent, ['int', 'string']),
+        testSequence: ice.Method(ByteArray, ice.mode.idempotent),
+        testDictionary: ice.Method(Properties, ice.mode.idempotent),
+        testException: ice.Method(null, ice.mode.idempotent, ['int', 'string'])
+    }
+
+    var Storage = {
+        info: ice.Method('string', ice.mode.idempotent),
+        get: ice.Method(ItemArray, ice.mode.idempotent, [
+            ice.Argument('name', 'string'),
+            ice.Argument('opt', Options)
+        ]),
+        format: ice.Method('string', ice.mode.idempotent, [
+            ice.Argument('name', 'string'),
+            ice.Argument('opt', Options),
+            ice.Argument('fmt', 'string')
+        ])
+    }
+
+    return {
+        Storage: Storage,
+        Service: Service
+    }
 })();
 
 //--------------------------------------------------------------------------
@@ -95,6 +134,14 @@ function test_call(func){
 	}
 }
 
+function srv_test() {
+    //var ret = srv.testStruct();
+    //var ret = srv.testSequence();
+    //var ret = srv.testDictionary();
+    var ret = srv.testException(1, "no message");
+    message('Service test: ' + (ret ? ret.toString() : 'undefined'));
+}
+
 function srv_echo(){
     message('Service echo: ' + srv.echo('test', null, { params: 127, userid: "guest", modifytime: 1 }));
 }
@@ -103,7 +150,19 @@ function strg_format(){
 	message('Storage format: ' + strg.format('test.users', null, 'json'));
 }
 
-function strg_info(async){
+function strg_get() {
+    var items = strg.get('test.users');
+    var len = items.length;
+    message('Storage items: ' + len);
+    for (var i = 0; i < len; i++) {
+        var item = items[i] || {};
+        var info = '>>>' + item.id;
+        if (item.props) info += ' name: ' + item.props['name'].val;
+        message(info);
+    }
+}
+
+function strg_info(async) {
 	if (!async) message('Storage info: ' + strg.info());
 	else strg.info(function(err, result){
 		if (err) message('Storage async error: ' + err, true);
@@ -128,9 +187,10 @@ function strg_info_loop(){
 // Main
 
 function exec(cmd){
-	if (cmd=='test\r\n') test_call(function(){ srv_echo(); });
+    if (cmd == 'test\r\n') test_call(function () { srv_test(); });
 	else if (cmd=='format\r\n') test_call(function(){ strg_format(); });
-	else if (cmd=='info\r\n') test_call(function(){ strg_info(false); });
+	else if (cmd=='items\r\n') test_call(function () { strg_get(); });
+	else if (cmd=='info\r\n') test_call(function () { strg_info(false); });
 	else if (cmd=='ainfo\r\n') test_call(function(){ strg_info(true); });
 	else if (cmd=='dinfo\r\n') test_call(function(){ strg_info(true); strg_info(false); });
 	else if (cmd=='start\r\n') test_call(function(){ strg_info_loop(); });
@@ -145,8 +205,9 @@ function help(){
 	'Script usage help:\r\n\r\n'+
 	'-----------------------------------------------\r\n'+
 	'test: run common test\r\n'+
-	'format: format storage test\r\n'+
-	'info: sync query storage info\r\n'+
+	'format: storage test\r\n'+
+	'items: storage test\r\n' +
+	'info: sync query storage info\r\n' +
 	'ainfo: async query storage info\r\n'+
 	'dinfo: async after sync (double) query storage info\r\n'+
 	'start: start loop any sync/async calls (test memory leaks)\r\n'+
