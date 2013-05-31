@@ -96,6 +96,8 @@ Ice client node.js implementation code:
 
 ToDo: 
 
+	- Application terminated in release mode; 
+
 	- Implemets ice class & ice user exception; 
 
 	- Test optional parameters: with sequence, with dictonary, at the begin of definition, on reordering tags;

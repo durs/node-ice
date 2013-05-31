@@ -13,13 +13,14 @@ module Monitoring
 {
 	sequence<byte> ByteArray;
 
-	struct Options
+	struct Value
 	{
-		long params;
-		string userid;
-		double modifytime;
+		short type;
+		string data;
 	};
-
+	
+	dictionary<string, Value> Properties;
+	
     struct Item
 	{
 		string id;
@@ -29,12 +30,18 @@ module Monitoring
 
 	sequence<Item> ItemArray;
 
+	struct Options
+	{
+		long params;
+		string userid;
+		double modifytime;
+	};
+	
 	interface Service
 	{
 		void shutdown();
 		idempotent string echo(string msg, optional(1) int delay, optional(2) Options opt);
 		idempotent Options testStruct();
-		idempotent IntValue testClass();
 		idempotent ByteArray testSequence();
 		idempotent Properties testDictionary();
 		idempotent void testException(int code, string msg) throws Error;
@@ -56,15 +63,9 @@ var Monitoring = (function () {
 
     var ByteArray = ice.Sequence('byte');
 
-    var Options = {
-        params: 'long',
-        userid: 'string',
-        modifytime: 'double'
-    }
-
     var Value = {
         type: 'short',
-        val: 'string'
+        data: 'string'
     }
 
     var Properties = ice.Dictionary('string', Value);
@@ -76,6 +77,12 @@ var Monitoring = (function () {
     }
 
     var ItemArray = ice.Sequence(Item);
+
+    var Options = {
+        params: 'long',
+        userid: 'string',
+        modifytime: 'double'
+    }
 
     var Service = {
         shutdown: ice.Method(),
