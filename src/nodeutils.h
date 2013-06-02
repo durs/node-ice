@@ -49,9 +49,9 @@ extern v8::Persistent<v8::String> g_v8s_read;
 #define NODE_DEFINE_PROPERTY(type, callback) \
 	static inline v8::Handle<v8::Value> node_##callback(v8::Local<v8::String> prop, const v8::AccessorInfo& info) { \
 		v8::HandleScope scope; \
-		type *me = ObjectWrap::Unwrap<type>(info.This()); \
-		if (!me) return v8::Undefined(); \
-		return scope.Close(me->callback(info.This())); } \
+		type *p = ObjectWrap::Unwrap<type>(info.Holder()); \
+		if (!p) return scope.Close(NODE_ERROR("Invalid node instance")); \
+		return scope.Close(p->callback(info.This())); } \
 	v8::Handle<v8::Value> callback(v8::Local<v8::Object> &me);
 
 #define NODE_ASSIGN_METHOD(t, name, callback) \

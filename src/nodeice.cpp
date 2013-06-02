@@ -287,11 +287,6 @@ void IceCallback::do_process(const Ice::AsyncResultPtr &r, bool async)
 v8::Persistent<v8::ObjectTemplate> g_communicator;
 v8::Persistent<v8::ObjectTemplate> g_proxy;
 
-/**
-* helper function and also to conform to the specification already implemented 
-* across other ICE language bindings. ie, allows for the following:
-* var ic = ice.initialize("args");//returns a communicator object
-*/
 /*
 v8::Handle<v8::Value> ice_initialize(const v8::Arguments& args)
 {
@@ -722,13 +717,12 @@ bool NodeIceStruct::read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, int op
 NodeIceCommunicator::NodeIceCommunicator():
 	ic(0)
 {
-	NODE_DEBUG_MSG("Ice.Communicator::Constructor");
+	NODE_DEBUG_MSG("Ice.Communicator::constructor");
 }
 			
 NodeIceCommunicator::~NodeIceCommunicator()
 {
-	NODE_DEBUG_MSG("Ice.Communicator::Destructor");
-	done();
+	NODE_DEBUG_MSG("Ice.Communicator::destructor");
 }
 
 
@@ -744,7 +738,7 @@ void NodeIceCommunicator::done()
   */
 void NodeIceCommunicator::init(const v8::Arguments& args)
 {
-	NODE_DEBUG_MSG("Ice.Communicator::New");
+	NODE_DEBUG_MSG("Ice.Communicator::new");
 	options.properties = Ice::createProperties();
 	v8::HandleScope scope;	
 	v8::Local<v8::Function> func;
@@ -809,19 +803,7 @@ v8::Handle<v8::Value> NodeIceCommunicator::stringToProxy(const v8::Arguments &ar
 	NodeIceProxy *p = ObjectWrap::Unwrap<NodeIceProxy>(proxy);
 	if (p) p->init(ic, prx);
 	return scope.Close(proxy);
-
-	/*
-	v8::Handle<v8::Object> ice_module = args.Holder()->Get(v8::String::New("__ice"))->ToObject();
-	v8::Handle<v8::Value> proxy_constructor_value = ice_module->Get(v8::String::New("Proxy"));
-	v8::Handle<v8::Function> proxy_constructor_func = v8::Handle<v8::Function>::Cast(proxy_constructor_value);
-	v8::Handle<v8::Object> proxy_obj = proxy_constructor_func->NewInstance();
-	NodeIceProxy* proxy = ObjectWrap::Unwrap<NodeIceProxy>(proxy_obj);	
-	NodeIceCommunicator* c = ObjectWrap::Unwrap<NodeIceCommunicator>(args.Holder());
-	proxy->prx = c->ic->stringToProxy(str);
-	return scope.Close(proxy_obj); // return the new proxy
-	*/
 }
-
 
 /**
   * take the property id provided as the first argument and return a new Ice Proxy
@@ -846,12 +828,12 @@ v8::Handle<v8::Value> NodeIceCommunicator::propertyToProxy(const v8::Arguments &
 
 NodeIceProxy::NodeIceProxy()
 {
-	NODE_DEBUG_MSG("Ice.Proxy::Constructor");
+	NODE_DEBUG_MSG("Ice.Proxy::constructor");
 }
 
 NodeIceProxy::~NodeIceProxy()
 {
-	NODE_DEBUG_MSG("Ice.Proxy::Destructor");
+	NODE_DEBUG_MSG("Ice.Proxy::destructor");
 	done();
 }
 
@@ -863,12 +845,12 @@ void NodeIceProxy::done()
 
 void NodeIceProxy::init(const v8::Arguments& args)
 {
-	NODE_DEBUG_MSG("Ice.Proxy::New");
+	NODE_DEBUG_MSG("Ice.Proxy::new");
 }
 
 v8::Handle<v8::Value> NodeIceProxy::invoke(const v8::Arguments &args)
 {
-	NODE_DEBUG_MSG("Ice.Proxy::Invoke");
+	NODE_DEBUG_MSG("Ice.Proxy::invoke");
 	v8::HandleScope scope;
 
 	// Prepare invocation arguments

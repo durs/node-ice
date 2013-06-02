@@ -202,8 +202,6 @@ public:
 	NODE_DEFINE_METHOD(NodeIceCommunicator, done)
 	NODE_DEFINE_METHOD(NodeIceCommunicator, stringToProxy)
 	NODE_DEFINE_METHOD(NodeIceCommunicator, propertyToProxy)
-	//static v8::Handle<v8::Value> StringToProxy(const v8::Arguments &args);
-	//static v8::Handle<v8::Value> PropertyToProxy(const v8::Arguments &args);
 };
 
 //-------------------------------------------------------------------------------------
