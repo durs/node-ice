@@ -458,7 +458,7 @@ void NodeIceSequence::init(const v8::Arguments& args)
 bool NodeIceSequence::write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, int opt)
 {
 	if (!type) return false;
-	assert(opt == 0);
+	//assert(opt == 0);
 	int cnt;
 	bool rcode = true;
 	v8::HandleScope scope;
@@ -480,7 +480,7 @@ bool NodeIceSequence::write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, in
 bool NodeIceSequence::read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, int opt)
 {
 	if (!type) return false;
-	assert(opt == 0);
+	//assert(opt == 0);
 	bool rcode = true;
 	v8::HandleScope scope;
 	v8::Local<v8::Array> obj(v8::Array::New());
