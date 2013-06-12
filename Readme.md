@@ -1,9 +1,7 @@
 
-::WARNING:: Partial ZeroC Ice RPC client implementation
-
 # node-ice
 
-This project provides a bridge to the ZeroC ICE RPC framework.
+This project provides a bridge from Node.JS to the ZeroC ICE RPC framework.
 
 Project tested only on Windows platform (Visual Studio 2010) with Node.JS 0.10.1, ZeroC Ice 3.5.0.
 	
@@ -64,7 +62,7 @@ Ice client node.js implementation code:
 	var communicator = 
 		// from parameters
 		new ice.Communicator({
-			"Storage.Proxy": "service:tcp -h localhost -p 10000:udp -h localhost -p 10000",
+			"Service.Proxy": "service:tcp -h localhost -p 10000:udp -h localhost -p 10000",
 			"Ice.Trace.Network": 1,
 			"Ice.Trace.Protocol": 1
 		});
@@ -76,7 +74,7 @@ Ice client node.js implementation code:
 	* create ice object proxy
 	* examples:
 	*     // from configuration property
-	*     communicator.propertyToProxy('Storage.Proxy', Monitoring.Service);												
+	*     communicator.propertyToProxy('Service.Proxy', Monitoring.Service);												
 	*     // from string
 	*     communicator.stringToProxy('service:tcp -h localhost -p 10000:udp -h localhost -p 10000', Monitoring.Service);	
 	*/
@@ -105,5 +103,7 @@ ToDo:
 	- Automatically parsing slice file into javascript
 
 	- Implements server features
+
+	- Compatibility with Linux/Unix 
 
 	- Search memory leaks;

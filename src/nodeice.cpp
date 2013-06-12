@@ -517,7 +517,7 @@ void NodeIceDictionary::init(const v8::Arguments& args)
 bool NodeIceDictionary::write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, int opt)
 {
 	if (!key_type || !value_type) return false;
-	assert(opt == 0);
+	//assert(opt == 0);
 	bool rcode = true;
 	v8::HandleScope scope;
 	v8::Local<v8::Object> obj;	
@@ -541,7 +541,7 @@ bool NodeIceDictionary::write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, 
 bool NodeIceDictionary::read(Ice::InputStreamPtr &s, v8::Local<v8::Value> &p, int opt)
 {
 	if (!key_type || !value_type) return false;
-	assert(opt == 0);
+	//assert(opt == 0);
 	bool rcode = true;
 	v8::HandleScope scope;
 	v8::Local<v8::Object> obj(v8::Object::New());

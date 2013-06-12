@@ -46,7 +46,7 @@ inline std::wstring node2ice(v8::Local<v8::Value> &p, const std::wstring &def) {
 inline v8::Local<v8::Value> ice2node(const Ice::Byte v) { v8::HandleScope scope; return scope.Close(v8::Int32::New(v)); }
 inline v8::Local<v8::Value> ice2node(const Ice::Short v) { v8::HandleScope scope; return scope.Close(v8::Int32::New(v)); }
 inline v8::Local<v8::Value> ice2node(const Ice::Int v) { v8::HandleScope scope; return scope.Close(v8::Int32::New(v)); }
-inline v8::Local<v8::Value> ice2node(const Ice::Long v) { v8::HandleScope scope; return scope.Close(v8::Integer::New(v)); }
+inline v8::Local<v8::Value> ice2node(const Ice::Long v) { v8::HandleScope scope; return scope.Close(v8::Number::New(v)); }
 inline v8::Local<v8::Value> ice2node(const Ice::Float v) { v8::HandleScope scope; return scope.Close(v8::Number::New(v)); }
 inline v8::Local<v8::Value> ice2node(const Ice::Double v) { v8::HandleScope scope; return scope.Close(v8::Number::New(v)); }
 inline v8::Local<v8::Value> ice2node(const bool v) { v8::HandleScope scope; return scope.Close(v8::Boolean::New(v)); }
