@@ -68,7 +68,8 @@
       <AdditionalDependencies>Iced.lib;IceUtild.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy /y $(TargetPath) $(SolutionDir)lib</Command>
+      <Command>copy /y $(TargetPath) $(SolutionDir)lib
+copy /y $(TargetPath) C:\NodeJS\node_modules\ice\lib</Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>Copy target file to lib folder</Message>
@@ -94,7 +95,8 @@
       <AdditionalDependencies>Iced.lib;IceUtild.lib;Ice.lib;IceUtil.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy /y $(TargetPath) $(SolutionDir)lib</Command>
+      <Command>copy /y $(TargetPath) $(SolutionDir)lib
+copy /y $(TargetPath) C:\NodeJS\node_modules\ice\lib</Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>Copy target file to lib folder</Message>

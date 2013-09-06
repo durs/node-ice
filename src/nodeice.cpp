@@ -463,17 +463,40 @@ bool NodeIceSequence::write(Ice::OutputStreamPtr &s, v8::Local<v8::Value> &p, in
 	bool rcode = true;
 	v8::HandleScope scope;
 	v8::Local<v8::Object> obj;
-	if (!node2obj(p, obj) || !node2int(obj->Get(g_v8s_length), cnt)) cnt = 0;
-	s->writeSize((Ice::Int)cnt);
-	for (int i = 0; i < cnt; i ++)
+	if (!node2obj(p, obj))
 	{
-		v8::Local<v8::Value> &pi = obj->Get(i);
-		if (!type->write(s, pi, 0))
-		{
-			rcode = false;
-			break;
-		}
+		s->writeSize((Ice::Int)0);
 	}
+	else if (node2int(obj->Get(g_v8s_length), cnt))
+	{
+		s->writeSize((Ice::Int)cnt);
+		for (int i = 0; i < cnt; i ++)
+		{
+			v8::Local<v8::Value> &pi = obj->Get(i);
+			if (!type->write(s, pi, 0))
+			{
+				rcode = false;
+				break;
+			}
+		}	
+	}
+	else
+	{
+		s->writeSize((Ice::Int)0);
+		/*
+		v8::Local<v8::Array> &keys = obj->GetOwnPropertyNames();
+		uint32_t keycnt = keys.IsEmpty() ? 0 : keys->Length();
+		s->writeSize((Ice::Int)keycnt);
+		for (uint32_t keyno = 0; keyno < keycnt; keyno ++)
+		{
+			v8::Local<v8::Value> &key = keys->Get(keyno);
+			v8::Local<v8::Value> &val = obj->Get(key);
+			rcode = func(key, val);
+			if (!rcode) break;
+		}
+		*/
+	}
+
 	return rcode;
 }
 
